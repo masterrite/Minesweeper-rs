@@ -1,0 +1,313 @@
+struct Cell {
+    is-mine: bool,
+    is-revealed: bool,
+    is-flagged: bool,
+    neighbor-count: int,
+}
+
+export enum GameState { Playing, Won, Lost }
+
+export component AppWindow inherits Window {
+    title: "Minesweeper";
+    
+    callback cell-clicked(int, int);
+    callback cell-flagged(int, int);
+    callback cell-chorded(int, int);
+    callback new-game(int);
+    callback toggle-theme();
+    callback open-bg-picker();
+    callback clear-bg-image();
+
+    in property <int>       cols: 9;
+    in property <int>       rows: 9;
+    in property <int>       mines-remaining: 10;
+    in property <int>       elapsed-seconds: 0;
+    in property <GameState> game-state: Playing;
+    in property <[Cell]>    cells;
+    in property <bool>      dark-mode: true;
+    in property <image>     bg-image;
+    in property <bool>      use-bg-image: false;
+
+    min-width: 300px;
+    min-height: 400px;
+
+    // ── Palette ───────────────────────────────────────────────────────────────
+    property <color> p-bg:      dark-mode ? #1e1e2e : #dfe3f0;
+    property <color> p-surface: dark-mode ? #313244 : #c8cedf;
+    property <color> p-overlay: dark-mode ? #45475a : #aeb5c9;
+    property <color> p-muted:   dark-mode ? #585b70 : #8b92a8;
+    property <color> p-text:    dark-mode ? #cdd6f4 : #1e2030;
+    property <color> p-subtext: dark-mode ? #a6adc8 : #444860;
+    property <color> p-green:   dark-mode ? #a6e3a1 : #2d6a30;
+    property <color> p-red:     dark-mode ? #f38ba8 : #a01530;
+    property <color> p-yellow:  dark-mode ? #f9e2af : #8c5e00;
+    property <color> p-blue:    dark-mode ? #89b4fa : #1040a0;
+    property <color> p-peach:   dark-mode ? #fab387 : #963800;
+    property <color> p-teal:    dark-mode ? #94e2d5 : #0a5560;
+    property <color> p-mauve:   dark-mode ? #cba6f7 : #5a1a8a;
+    property <color> p-sky:     dark-mode ? #89dceb : #005a80;
+
+    background: use-bg-image ? #00000000 : p-bg;
+    animate background { duration: 180ms; }
+
+    property <bool> settings-open: false;
+    
+    function neighbor-color(n: int) -> color {
+        if n == 1 { return p-blue;   }
+        if n == 2 { return p-green;  }
+        if n == 3 { return p-red;    }
+        if n == 4 { return p-mauve;  }
+        if n == 5 { return p-peach;  }
+        if n == 6 { return p-teal;   }
+        if n == 7 { return p-sky;    }
+        return p-text;
+    }
+
+    if use-bg-image : Image {
+        source: bg-image;
+        x: 0; y: 0;
+        width: parent.width;
+        height: parent.height;
+        image-fit: cover;
+    }
+
+    // Wrap the entire layout to ensure contents flex to fill the window
+    Rectangle {
+        width: parent.width;
+        height: parent.height;
+
+        VerticalLayout {
+            padding: 8px;
+            spacing: 6px;
+            // REMOVED alignment: start; (this was crushing the grid)
+
+            // ── Header ────────────────────────────────────────────────────────────
+            Rectangle {
+                height: 42px;
+                border-radius: 8px;
+                background: use-bg-image ? (dark-mode ? #1e1e2ed8 : #dfe3f0d8) : p-surface;
+                animate background { duration: 180ms; }
+
+                HorizontalLayout {
+                    padding-left: 12px;
+                    padding-right: 12px;
+                    alignment: space-between;
+
+                    Text {
+                        text: "💣 " + mines-remaining;
+                        color: p-red;
+                        font-size: 16px; font-weight: 700;
+                        vertical-alignment: center;
+                        width: 65px;
+                        height: 42px;
+                    }
+
+                    smiley-ta := TouchArea {
+                        width: 40px;
+                        height: 42px;
+                        clicked => { new-game(rows == 9 ? 0 : (cols == 16 ? 1 : 2)); }
+                        Text {
+                            text: game-state == GameState.Won  ? "😎" :
+                                  game-state == GameState.Lost ? "😵" : "😊";
+                            font-size: 24px;
+                            width: 40px;
+                            height: 42px;
+                            horizontal-alignment: center;
+                            vertical-alignment: center;
+                        }
+                    }
+
+                    Text {
+                        text: "⏱ " + elapsed-seconds;
+                        color: p-yellow;
+                        font-size: 16px; font-weight: 700;
+                        horizontal-alignment: right;
+                        vertical-alignment: center;
+                        width: 65px;
+                        height: 42px;
+                    }
+                }
+            }
+
+            // ── Toolbar ───────────────────────────────────────────────────────────
+            HorizontalLayout {
+                spacing: 5px;
+                alignment: center;
+                height: 28px;
+
+                Rectangle {
+                    width: 58px; height: 28px; border-radius: 6px;
+                    background: d0.has-hover ? p-overlay : (use-bg-image ? p-surface.with-alpha(0.85) : p-surface);
+                    animate background { duration: 80ms; }
+                    d0 := TouchArea { clicked => { new-game(0); } }
+                    Text { text: "Easy"; color: p-text; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                Rectangle {
+                    width: 66px; height: 28px; border-radius: 6px;
+                    background: d1.has-hover ? p-overlay : (use-bg-image ? p-surface.with-alpha(0.85) : p-surface);
+                    animate background { duration: 80ms; }
+                    d1 := TouchArea { clicked => { new-game(1); } }
+                    Text { text: "Medium"; color: p-text; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                }
+                Rectangle {
+                    width: 58px; height: 28px; border-radius: 6px;
+                    background: d2.has-hover ? p-overlay : (use-bg-image ? p-surface.with-alpha(0.85) : p-surface);
+                    animate background { duration: 80ms; }
+                    d2 := TouchArea { clicked => { new-game(2); } }
+                    Text { text: "Hard"; color: p-text; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                }
+
+                Rectangle { width: 8px; background: transparent; }
+
+                gear-ta := TouchArea {
+                    width: 28px; height: 28px;
+                    clicked => { settings-open = !settings-open; }
+                    Text {
+                        text: "⚙";
+                        color: settings-open ? p-yellow : p-subtext; font-size: 16px;
+                        width: 28px; height: 28px; horizontal-alignment: center; vertical-alignment: center;
+                    }
+                }
+            }
+
+            // ── Settings panel ────────────────────────────────────────────────────
+            if settings-open : Rectangle {
+                height: 62px;
+                border-radius: 8px;
+                background: use-bg-image ? (dark-mode ? #1e1e2eee : #dfe3f0ee) : p-surface;
+                animate background { duration: 180ms; }
+
+                VerticalLayout {
+                    padding: 8px; spacing: 6px;
+                    Text {
+                        text: "SETTINGS";
+                        color: p-subtext; font-size: 9px; font-weight: 700; height: 12px;
+                    }
+                    HorizontalLayout {
+                        spacing: 6px; alignment: start; height: 28px;
+                        Rectangle {
+                            width: 110px; height: 28px; border-radius: 6px;
+                            background: th-ta.has-hover ? p-overlay : p-bg.with-alpha(0.6);
+                            border-width: 1px; border-color: p-muted;
+                            animate background { duration: 80ms; }
+                            th-ta := TouchArea { clicked => { toggle-theme(); } }
+                            HorizontalLayout {
+                                padding-left: 7px; padding-right: 7px; spacing: 5px; alignment: center;
+                                Text { text: dark-mode ? "☀" : "🌙"; font-size: 14px; height: 28px; vertical-alignment: center; }
+                                Text { text: dark-mode ? "Light" : "Dark"; color: p-text; font-size: 11px; font-weight: 600; vertical-alignment: center; }
+                            }
+                        }
+                        Rectangle {
+                            width: 130px; height: 28px; border-radius: 6px;
+                            background: bg-ta.has-hover ? p-overlay : p-bg.with-alpha(0.6);
+                            border-width: 1px; border-color: p-muted;
+                            animate background { duration: 80ms; }
+                            bg-ta := TouchArea { clicked => { open-bg-picker(); } }
+                            HorizontalLayout {
+                                padding-left: 7px; padding-right: 7px; spacing: 5px; alignment: center;
+                                Text { text: "📁"; font-size: 14px; height: 28px; vertical-alignment: center; }
+                                Text { text: use-bg-image ? "Change bg" : "Set bg image"; color: p-text; font-size: 11px; font-weight: 600; vertical-alignment: center; }
+                            }
+                        }
+                        if use-bg-image : TouchArea {
+                            width: 28px; height: 28px;
+                            clicked => { clear-bg-image(); }
+                            Text { text: "×"; color: clr-hover.has-hover ? p-red : p-subtext; font-size: 14px; font-weight: 700; width: 28px; height: 28px; horizontal-alignment: center; vertical-alignment: center; }
+                            clr-hover := TouchArea {}
+                        }
+                    }
+                }
+            }
+
+            // ── Win/Lose banner ───────────────────────────────────────────────────
+            if game-state != GameState.Playing : Rectangle {
+                height: 30px; border-radius: 7px;
+                background: game-state == GameState.Won ? p-green.with-alpha(use-bg-image ? 0.45 : 0.18) : p-red.with-alpha(use-bg-image ? 0.45 : 0.18);
+                Text {
+                    text: game-state == GameState.Won ? "🎉  You win!  Click 😊 to play again." : "💥  Game over!  Click 😊 to play again.";
+                    color: game-state == GameState.Won ? p-green : p-red;
+                    font-size: 12px; font-weight: 700; height: 30px; horizontal-alignment: center; vertical-alignment: center;
+                }
+            }
+
+            // ── Fluid Grid ─────────────────────────────────────────────────────────
+            Rectangle {
+                vertical-stretch: 1; // Force the layout to give this container the remaining space
+                border-radius: 8px;
+                background: use-bg-image ? (dark-mode ? #313244bb : #c8cedfbb) : p-surface;
+                clip: true;
+                animate background { duration: 180ms; }
+
+                for cell[idx] in cells : cell-item := Rectangle {
+                    property <int> cell-col: mod(idx, cols);
+                    property <int> cell-row: floor(idx / cols);
+                    property <bool> left-down: false;
+                    property <bool> right-down: false;
+                    
+                    // Core fluid math dividing up the container seamlessly
+                    x: (parent.width / cols) * self.cell-col;
+                    y: (parent.height / rows) * self.cell-row;
+                    width: parent.width / cols;
+                    height: parent.height / rows;
+
+                    border-radius: 4px;
+                    background:
+                        (left-down && right-down)              ? p-yellow.with-alpha(0.35) :
+                        !cell.is-revealed && cell-ta.has-hover ? p-muted :
+                        cell.is-revealed && cell.is-mine       ? p-red.with-alpha(0.45) :
+                        cell.is-revealed                       ? p-bg.with-alpha(0.9) :
+                        cell.is-flagged                        ? p-yellow.with-alpha(0.18) : p-overlay;
+                    
+                    border-width: 1px;
+                    border-color:
+                        cell.is-revealed && cell.is-mine ? p-red :
+                        cell.is-revealed                 ? p-muted.with-alpha(0.25) :
+                        cell.is-flagged                  ? p-yellow : p-muted;
+                    
+                    animate background { duration: 50ms; }
+
+                    Text {
+                        width: parent.width; height: parent.height;
+                        horizontal-alignment: center; vertical-alignment: center;
+                        
+                        // Dynamically scale font to prevent clipping at weird aspect ratios
+                        font-size: min(parent.width, parent.height) * 0.55;
+                        font-weight: 700;
+                        
+                        text:
+                            cell.is-flagged && !cell.is-revealed ? "🚩" :
+                            !cell.is-revealed                    ? "" :
+                            cell.is-mine                         ? "💣" :
+                            cell.neighbor-count > 0              ? cell.neighbor-count : "";
+                        color: neighbor-color(cell.neighbor-count);
+                    }
+
+                    cell-ta := TouchArea {
+                        width: parent.width; height: parent.height;
+                        clicked => {
+                            if game-state == GameState.Playing && !cell.is-revealed {
+                                cell-clicked(cell-item.cell-col, cell-item.cell-row);
+                            }
+                        }
+                        pointer-event(e) => {
+                            if e.kind == PointerEventKind.down {
+                                if e.button == PointerEventButton.left  { cell-item.left-down  = true; }
+                                if e.button == PointerEventButton.right { cell-item.right-down = true; }
+                            }
+                            if e.kind == PointerEventKind.up {
+                                if e.button == PointerEventButton.right && !cell-item.left-down && game-state == GameState.Playing && !cell.is-revealed {
+                                    cell-flagged(cell-item.cell-col, cell-item.cell-row);
+                                }
+                                if cell-item.left-down && cell-item.right-down && cell.is-revealed && cell.neighbor-count > 0 && game-state == GameState.Playing {
+                                    cell-chorded(cell-item.cell-col, cell-item.cell-row);
+                                }
+                                if e.button == PointerEventButton.left  { cell-item.left-down  = false; }
+                                if e.button == PointerEventButton.right { cell-item.right-down = false; }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,21 @@
+[package]
+name = "minesweeper"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+slint          = { version = "1.16", features = ["compat-1-2", "backend-winit", "renderer-femtovg"], default-features = false }
+rand           = { version = "0.8",  features = ["small_rng", "getrandom"], default-features = false }
+image          = { version = "0.25", features = ["png", "jpeg", "bmp"], default-features = false }
+rfd            = "0.15"
+futures-lite   = { version = "2", default-features = false, features = ["std"] }
+
+[build-dependencies]
+slint-build = "1.16"
+
+[profile.release]
+opt-level     = "z"
+lto           = true
+codegen-units = 1
+panic         = "abort"
+strip         = true
