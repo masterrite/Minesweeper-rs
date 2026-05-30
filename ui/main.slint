@@ -27,9 +27,13 @@ export component AppWindow inherits Window {
     in property <bool>      dark-mode: true;
     in property <image>     bg-image;
     in property <bool>      use-bg-image: false;
+    in property <float>     zoom: 1.0;
 
     min-width: 300px;
     min-height: 400px;
+
+    // Dynamically scale UI elements based on window size
+    property <float> s: min(root.width / 350px, root.height / 400px);
 
     // ── Palette ───────────────────────────────────────────────────────────────
     property <color> p-bg:      dark-mode ? #1e1e2e : #dfe3f0;
@@ -47,7 +51,7 @@ export component AppWindow inherits Window {
     property <color> p-mauve:   dark-mode ? #cba6f7 : #5a1a8a;
     property <color> p-sky:     dark-mode ? #89dceb : #005a80;
 
-    background: use-bg-image ? #00000000 : p-bg;
+    background: use-bg-image ? transparent : p-bg;
     animate background { duration: 180ms; }
 
     property <bool> settings-open: false;
@@ -71,47 +75,44 @@ export component AppWindow inherits Window {
         image-fit: cover;
     }
 
-    // Wrap the entire layout to ensure contents flex to fill the window
     Rectangle {
         width: parent.width;
         height: parent.height;
 
         VerticalLayout {
-            padding: 8px;
-            spacing: 6px;
-            // REMOVED alignment: start; (this was crushing the grid)
+            padding: 8px * zoom;
+            spacing: 6px * zoom;
 
             // ── Header ────────────────────────────────────────────────────────────
             Rectangle {
-                height: 42px;
-                border-radius: 8px;
+                height: 42px * zoom;
+                border-radius: 8px * zoom;
                 background: use-bg-image ? (dark-mode ? #1e1e2ed8 : #dfe3f0d8) : p-surface;
                 animate background { duration: 180ms; }
 
                 HorizontalLayout {
-                    padding-left: 12px;
-                    padding-right: 12px;
+                    padding-left: 12px * zoom;
+                    padding-right: 12px * zoom;
                     alignment: space-between;
 
                     Text {
                         text: "💣 " + mines-remaining;
                         color: p-red;
-                        font-size: 16px; font-weight: 700;
+                        font-size: 16px * zoom; font-weight: 700;
                         vertical-alignment: center;
-                        width: 65px;
-                        height: 42px;
+                        width: 65px * zoom;
+                        height: 42px * zoom;
                     }
 
                     smiley-ta := TouchArea {
-                        width: 40px;
-                        height: 42px;
+                        width: 40px * zoom;
+                        height: 42px * zoom;
                         clicked => { new-game(rows == 9 ? 0 : (cols == 16 ? 1 : 2)); }
                         Text {
                             text: game-state == GameState.Won  ? "😎" :
                                   game-state == GameState.Lost ? "😵" : "😊";
-                            font-size: 24px;
-                            width: 40px;
-                            height: 42px;
+                            font-size: 24px * zoom;
+                            width: 100%; height: 100%;
                             horizontal-alignment: center;
                             vertical-alignment: center;
                         }
@@ -120,100 +121,104 @@ export component AppWindow inherits Window {
                     Text {
                         text: "⏱ " + elapsed-seconds;
                         color: p-yellow;
-                        font-size: 16px; font-weight: 700;
+                        font-size: 16px * zoom; font-weight: 700;
                         horizontal-alignment: right;
                         vertical-alignment: center;
-                        width: 65px;
-                        height: 42px;
+                        width: 65px * zoom;
+                        height: 42px * zoom;
                     }
                 }
             }
 
             // ── Toolbar ───────────────────────────────────────────────────────────
             HorizontalLayout {
-                spacing: 5px;
+                spacing: 5px * zoom;
                 alignment: center;
-                height: 28px;
+                height: 28px * zoom;
 
                 Rectangle {
-                    width: 58px; height: 28px; border-radius: 6px;
+                    width: 58px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
                     background: d0.has-hover ? p-overlay : (use-bg-image ? p-surface.with-alpha(0.85) : p-surface);
                     animate background { duration: 80ms; }
                     d0 := TouchArea { clicked => { new-game(0); } }
-                    Text { text: "Easy"; color: p-text; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: "Easy"; color: p-text; font-size: 11px * zoom; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
                 }
                 Rectangle {
-                    width: 66px; height: 28px; border-radius: 6px;
+                    width: 66px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
                     background: d1.has-hover ? p-overlay : (use-bg-image ? p-surface.with-alpha(0.85) : p-surface);
                     animate background { duration: 80ms; }
                     d1 := TouchArea { clicked => { new-game(1); } }
-                    Text { text: "Medium"; color: p-text; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: "Medium"; color: p-text; font-size: 11px * zoom; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
                 }
                 Rectangle {
-                    width: 58px; height: 28px; border-radius: 6px;
+                    width: 58px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
                     background: d2.has-hover ? p-overlay : (use-bg-image ? p-surface.with-alpha(0.85) : p-surface);
                     animate background { duration: 80ms; }
                     d2 := TouchArea { clicked => { new-game(2); } }
-                    Text { text: "Hard"; color: p-text; font-size: 11px; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
+                    Text { text: "Hard"; color: p-text; font-size: 11px * zoom; font-weight: 600; horizontal-alignment: center; vertical-alignment: center; }
                 }
 
-                Rectangle { width: 8px; background: transparent; }
+                Rectangle { width: 8px * zoom; background: transparent; }
 
                 gear-ta := TouchArea {
-                    width: 28px; height: 28px;
+                    width: 28px * zoom; height: 28px * zoom;
                     clicked => { settings-open = !settings-open; }
                     Text {
                         text: "⚙";
-                        color: settings-open ? p-yellow : p-subtext; font-size: 16px;
-                        width: 28px; height: 28px; horizontal-alignment: center; vertical-alignment: center;
+                        color: settings-open ? p-yellow : p-subtext; font-size: 16px * zoom;
+                        width: 100%; height: 100%; horizontal-alignment: center; vertical-alignment: center;
                     }
                 }
             }
 
             // ── Settings panel ────────────────────────────────────────────────────
             if settings-open : Rectangle {
-                height: 62px;
-                border-radius: 8px;
+                height: 62px * zoom;
+                border-radius: 8px * zoom;
                 background: use-bg-image ? (dark-mode ? #1e1e2eee : #dfe3f0ee) : p-surface;
                 animate background { duration: 180ms; }
 
                 VerticalLayout {
-                    padding: 8px; spacing: 6px;
+                    padding: 8px * zoom; spacing: 6px * zoom;
                     Text {
                         text: "SETTINGS";
-                        color: p-subtext; font-size: 9px; font-weight: 700; height: 12px;
+                        color: p-subtext; font-size: 9px * zoom; font-weight: 700; height: 12px * zoom;
                     }
                     HorizontalLayout {
-                        spacing: 6px; alignment: start; height: 28px;
+                        spacing: 6px * zoom; alignment: start; height: 28px * zoom;
                         Rectangle {
-                            width: 110px; height: 28px; border-radius: 6px;
+                            width: 110px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
                             background: th-ta.has-hover ? p-overlay : p-bg.with-alpha(0.6);
-                            border-width: 1px; border-color: p-muted;
+                            border-width: 1px * zoom; border-color: p-muted;
                             animate background { duration: 80ms; }
                             th-ta := TouchArea { clicked => { toggle-theme(); } }
                             HorizontalLayout {
-                                padding-left: 7px; padding-right: 7px; spacing: 5px; alignment: center;
-                                Text { text: dark-mode ? "☀" : "🌙"; font-size: 14px; height: 28px; vertical-alignment: center; }
-                                Text { text: dark-mode ? "Light" : "Dark"; color: p-text; font-size: 11px; font-weight: 600; vertical-alignment: center; }
+                                padding-left: 7px * zoom; padding-right: 7px * zoom; spacing: 5px * zoom; alignment: center;
+                                Text { text: dark-mode ? "☀" : "🌙"; font-size: 14px * zoom; height: 28px * zoom; vertical-alignment: center; }
+                                Text { text: dark-mode ? "Light" : "Dark"; color: p-text; font-size: 11px * zoom; font-weight: 600; vertical-alignment: center; }
                             }
                         }
                         Rectangle {
-                            width: 130px; height: 28px; border-radius: 6px;
+                            width: 130px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
                             background: bg-ta.has-hover ? p-overlay : p-bg.with-alpha(0.6);
-                            border-width: 1px; border-color: p-muted;
+                            border-width: 1px * zoom; border-color: p-muted;
                             animate background { duration: 80ms; }
                             bg-ta := TouchArea { clicked => { open-bg-picker(); } }
                             HorizontalLayout {
-                                padding-left: 7px; padding-right: 7px; spacing: 5px; alignment: center;
-                                Text { text: "📁"; font-size: 14px; height: 28px; vertical-alignment: center; }
-                                Text { text: use-bg-image ? "Change bg" : "Set bg image"; color: p-text; font-size: 11px; font-weight: 600; vertical-alignment: center; }
+                                padding-left: 7px * zoom; padding-right: 7px * zoom; spacing: 5px * zoom; alignment: center;
+                                Text { text: "📁"; font-size: 14px * zoom; height: 28px * zoom; vertical-alignment: center; }
+                                Text { text: use-bg-image ? "Change bg" : "Set bg image"; color: p-text; font-size: 11px * zoom; font-weight: 600; vertical-alignment: center; }
                             }
                         }
-                        if use-bg-image : TouchArea {
-                            width: 28px; height: 28px;
-                            clicked => { clear-bg-image(); }
-                            Text { text: "×"; color: clr-hover.has-hover ? p-red : p-subtext; font-size: 14px; font-weight: 700; width: 28px; height: 28px; horizontal-alignment: center; vertical-alignment: center; }
-                            clr-hover := TouchArea {}
+                        if use-bg-image : Rectangle {
+                            width: 28px * zoom; height: 28px * zoom;
+                            clr-ta := TouchArea { clicked => { clear-bg-image(); } }
+                            Text { 
+                                text: "✕"; color: clr-ta.has-hover ? p-red : p-subtext; 
+                                font-size: 14px * zoom; font-weight: 700; 
+                                width: 100%; height: 100%; 
+                                horizontal-alignment: center; vertical-alignment: center; 
+                            }
                         }
                     }
                 }
@@ -221,20 +226,20 @@ export component AppWindow inherits Window {
 
             // ── Win/Lose banner ───────────────────────────────────────────────────
             if game-state != GameState.Playing : Rectangle {
-                height: 30px; border-radius: 7px;
+                height: 30px * zoom; border-radius: 7px * zoom;
                 background: game-state == GameState.Won ? p-green.with-alpha(use-bg-image ? 0.45 : 0.18) : p-red.with-alpha(use-bg-image ? 0.45 : 0.18);
                 Text {
                     text: game-state == GameState.Won ? "🎉  You win!  Click 😊 to play again." : "💥  Game over!  Click 😊 to play again.";
                     color: game-state == GameState.Won ? p-green : p-red;
-                    font-size: 12px; font-weight: 700; height: 30px; horizontal-alignment: center; vertical-alignment: center;
+                    font-size: 12px * zoom; font-weight: 700; height: 100%; horizontal-alignment: center; vertical-alignment: center;
                 }
             }
 
             // ── Fluid Grid ─────────────────────────────────────────────────────────
             Rectangle {
-                vertical-stretch: 1; // Force the layout to give this container the remaining space
-                border-radius: 8px;
-                background: use-bg-image ? (dark-mode ? #313244bb : #c8cedfbb) : p-surface;
+                vertical-stretch: 1; 
+                border-radius: 8px * zoom;
+                background: use-bg-image ? (dark-mode ? #31324488 : #c8cedf88) : p-surface;
                 clip: true;
                 animate background { duration: 180ms; }
 
@@ -244,33 +249,31 @@ export component AppWindow inherits Window {
                     property <bool> left-down: false;
                     property <bool> right-down: false;
                     
-                    // Core fluid math dividing up the container seamlessly
                     x: (parent.width / cols) * self.cell-col;
                     y: (parent.height / rows) * self.cell-row;
                     width: parent.width / cols;
                     height: parent.height / rows;
 
-                    border-radius: 4px;
+                    border-radius: 4px * zoom;
+                    // Lowered alpha layers to expose the background better
                     background:
-                        (left-down && right-down)              ? p-yellow.with-alpha(0.35) :
-                        !cell.is-revealed && cell-ta.has-hover ? p-muted :
+                        (left-down && right-down)              ? p-yellow.with-alpha(0.75) :
+                        !cell.is-revealed && cell-ta.has-hover ? p-muted.with-alpha(0.85) :
                         cell.is-revealed && cell.is-mine       ? p-red.with-alpha(0.45) :
-                        cell.is-revealed                       ? p-bg.with-alpha(0.9) :
-                        cell.is-flagged                        ? p-yellow.with-alpha(0.18) : p-overlay;
+                        cell.is-revealed                       ? p-bg.with-alpha(0.45) :
+                        cell.is-flagged                        ? p-yellow.with-alpha(0.45) : p-overlay.with-alpha(0.85);
                     
                     border-width: 1px;
                     border-color:
                         cell.is-revealed && cell.is-mine ? p-red :
-                        cell.is-revealed                 ? p-muted.with-alpha(0.25) :
-                        cell.is-flagged                  ? p-yellow : p-muted;
+                        cell.is-revealed                 ? p-muted.with-alpha(0.65) :
+                        cell.is-flagged                  ? p-yellow : p-muted.with-alpha(0.55);
                     
                     animate background { duration: 50ms; }
 
                     Text {
-                        width: parent.width; height: parent.height;
+                        width: 100%; height: 100%;
                         horizontal-alignment: center; vertical-alignment: center;
-                        
-                        // Dynamically scale font to prevent clipping at weird aspect ratios
                         font-size: min(parent.width, parent.height) * 0.55;
                         font-weight: 700;
                         
@@ -283,7 +286,7 @@ export component AppWindow inherits Window {
                     }
 
                     cell-ta := TouchArea {
-                        width: parent.width; height: parent.height;
+                        width: 100%; height: 100%;
                         clicked => {
                             if game-state == GameState.Playing && !cell.is-revealed {
                                 cell-clicked(cell-item.cell-col, cell-item.cell-row);
