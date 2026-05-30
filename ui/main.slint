@@ -31,17 +31,25 @@ export component AppWindow inherits Window {
     min-width: 300px;
     min-height: 400px;
 
-    // Single scale factor for the WHOLE UI. Computed in Rust from the live
-    // window size vs. the design size, using min(w/ref-w, h/ref-h) so the
-    // entire interface (chrome + grid) scales as one uniform block, like
-    // zooming a page. Kept OUT of the layout graph (as an input property) to
-    // avoid a binding loop, since zoom drives the sizes that feed layout info.
-    in property <float> zoom: 1.0;
-
     // Base (1.0-zoom) size of one grid cell, in logical px. The grid's natural
-    // size is cols*cell-base by rows*cell-base; everything else is sized to
-    // match. Rust uses the same constant to compute the design window size.
+    // size is cols*cell-base by rows*cell-base; everything else is sized to match.
     property <length> cell-base: 32px;
+
+    // The UI's natural (zoom = 1.0) design size for the current difficulty.
+    // 16px = horizontal padding; 98px = total vertical chrome (padding 16 +
+    // header 42 + spacing 6 + toolbar 28 + spacing 6).
+    property <length> ref-width:  cols * cell-base + 16px;
+    property <length> ref-height: rows * cell-base + 98px;
+
+    // Single scale factor for the WHOLE UI, derived live from the window size.
+    // min() of the two axis ratios preserves aspect, so chrome + grid scale as
+    // one block and track the drag in real time (no timer, no post-resize snap).
+    //
+    // This does NOT create a binding loop because the window's width/height no
+    // longer depend on the content: the content block is sized explicitly from
+    // `zoom` and merely centered inside a full-window Rectangle, so nothing
+    // feeds child size info back up into root.width / root.height.
+    property <float> zoom: max(0.4, min(root.width / ref-width, root.height / ref-height));
 
     // ── Palette ───────────────────────────────────────────────────────────────
     property <color> p-bg:      dark-mode ? #1e1e2e : #dfe3f0;

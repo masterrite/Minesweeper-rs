@@ -278,23 +278,6 @@ fn design_size(diff: Difficulty) -> (f32, f32) {
 fn apply_ideal_window_size(ui: &AppWindow, diff: Difficulty) {
     let (w, h) = design_size(diff);
     ui.window().set_size(LogicalSize::new(w, h));
-    update_zoom(ui);
-}
-
-// Compute ONE scale factor for the whole UI from the window size vs. the
-// design size, using min of the two axes so the interface scales uniformly
-// (preserving aspect) instead of the grid stretching on its own. Computed in
-// Rust to keep `zoom` out of Slint's layout graph and avoid a binding loop.
-fn update_zoom(ui: &AppWindow) {
-    let size = ui.window().size().to_logical(ui.window().scale_factor());
-    let diff = Difficulty {
-        cols: ui.get_cols() as usize,
-        rows: ui.get_rows() as usize,
-        mines: 0,
-    };
-    let (ref_w, ref_h) = design_size(diff);
-    let zoom = (size.width / ref_w).min(size.height / ref_h).clamp(0.5, 4.0);
-    ui.set_zoom(zoom);
 }
 
 
@@ -338,26 +321,6 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui.upgrade() {
                 let elapsed = game.borrow_mut().tick();
                 ui.set_elapsed_seconds(elapsed as i32);
-            }
-        });
-    }
-
-    // Keep `zoom` in sync with the window size. Slint has no version-stable
-    // per-frame resize callback we can rely on here, so we poll the size on a
-    // short interval and only update when the size actually changes. Cheap and
-    // responsive. We watch both axes since zoom now depends on width AND height.
-    let zoom_timer = Timer::default();
-    {
-        let ui = ui.as_weak();
-        let last = Rc::new(RefCell::new((0.0_f32, 0.0_f32)));
-        zoom_timer.start(TimerMode::Repeated, Duration::from_millis(60), move || {
-            if let Some(ui) = ui.upgrade() {
-                let s = ui.window().size().to_logical(ui.window().scale_factor());
-                let (lw, lh) = *last.borrow();
-                if (s.width - lw).abs() > 0.5 || (s.height - lh).abs() > 0.5 {
-                    *last.borrow_mut() = (s.width, s.height);
-                    update_zoom(&ui);
-                }
             }
         });
     }
