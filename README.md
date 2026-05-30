@@ -14,6 +14,11 @@ sudo apt install libxcb1-dev libxkbcommon-dev libfontconfig1-dev
 cargo run --release
 ```
 
+## Features
+
+- Set your own background
+- Resizing the window also scales the UI
+
 ## Controls
 
 | Action | How |
@@ -25,8 +30,3 @@ cargo run --release
 | Change difficulty | Easy / Medium / Hard buttons |
 | Toggle light/dark | ☀ Light / 🌙 Dark button |
 | Custom background | Click a colour swatch |
-
-## Extra feature
-
-- Set your own background
-- Resizing the window also scales the UI
