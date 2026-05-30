@@ -4,7 +4,7 @@ A minesweeper game written in rust and slint using Claude and Gemini
 ## Features
 - Resizeable window with scaling game tiles
 - Customize background
-- Toggable light/dark mode
+- Toggle between light/dark mode
 
 ## Building
 
