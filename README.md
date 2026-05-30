@@ -17,6 +17,7 @@ cargo run --release
 ## Features
 
 - Set your own background
+    + Background directory: ~\AppData\Roaming\minesweeper 
 - Resizing the window also scales the UI
 
 ## Controls
