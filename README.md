@@ -19,3 +19,15 @@ cd collector
 cargo run              # development
 cargo build --release  # → target/release/collector
 ```
+
+## Packaging
+
+```bash
+# Linux AppImage / .deb
+cargo install cargo-bundle && cargo bundle --release
+
+# macOS .app
+cargo bundle --release   # → target/release/bundle/osx/Collector.app
+
+# Windows: the .exe is already standalone
+```
