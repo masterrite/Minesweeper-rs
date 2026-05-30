@@ -8,7 +8,62 @@ use std::{cell::RefCell, rc::Rc, time::{Duration, Instant}};
 
 slint::include_modules!();
 
-const BG_SAVE_FILE: &str = "minesweeper_bg.txt";
+// Persisted background lives inside the OS per-app config directory as a single
+// copied image file (no stray text file next to the exe, and it survives the
+// user moving/deleting the original). We keep a fixed stem and remember the
+// extension by globbing for "background.*".
+//
+// Resolution order, std-only (no extra crate):
+//   Windows: %APPDATA%\minesweeper
+//   macOS:   $HOME/Library/Application Support/minesweeper
+//   Linux:   $XDG_CONFIG_HOME/minesweeper  (or $HOME/.config/minesweeper)
+fn config_dir() -> std::path::PathBuf {
+    let base = if cfg!(target_os = "windows") {
+        std::env::var_os("APPDATA")
+            .map(std::path::PathBuf::from)
+            .unwrap_or_else(std::env::temp_dir)
+    } else if cfg!(target_os = "macos") {
+        std::env::var_os("HOME")
+            .map(|h| std::path::PathBuf::from(h).join("Library/Application Support"))
+            .unwrap_or_else(std::env::temp_dir)
+    } else {
+        std::env::var_os("XDG_CONFIG_HOME")
+            .map(std::path::PathBuf::from)
+            .or_else(|| std::env::var_os("HOME").map(|h| std::path::PathBuf::from(h).join(".config")))
+            .unwrap_or_else(std::env::temp_dir)
+    };
+    base.join("minesweeper")
+}
+
+// Path of the currently-saved background image, if one exists on disk.
+fn saved_bg_path() -> Option<std::path::PathBuf> {
+    let dir = config_dir();
+    for ext in ["png", "jpg", "jpeg", "bmp"] {
+        let p = dir.join(format!("background.{ext}"));
+        if p.exists() { return Some(p); }
+    }
+    None
+}
+
+// Copy the chosen image into the config dir as "background.<ext>", removing any
+// previously-saved background first. Returns the stored path on success.
+fn save_bg(src: &std::path::Path) -> Option<std::path::PathBuf> {
+    let dir = config_dir();
+    std::fs::create_dir_all(&dir).ok()?;
+    clear_bg(); // remove any prior background.* so only one exists
+    let ext = src.extension().and_then(|e| e.to_str()).unwrap_or("png").to_lowercase();
+    let dst = dir.join(format!("background.{ext}"));
+    std::fs::copy(src, &dst).ok()?;
+    Some(dst)
+}
+
+// Remove any saved background image from the config dir.
+fn clear_bg() {
+    let dir = config_dir();
+    for ext in ["png", "jpg", "jpeg", "bmp"] {
+        let _ = std::fs::remove_file(dir.join(format!("background.{ext}")));
+    }
+}
 
 // ── Difficulty ────────────────────────────────────────────────────────────────
 
@@ -191,10 +246,11 @@ fn open_file_dialog_async(ui_weak: slint::Weak<AppWindow>) {
     std::thread::spawn(move || {
         if let Some(file) = futures_lite::future::block_on(task) {
             let path = file.path().to_owned();
-            // Save the path to load on next startup
-            let _ = std::fs::write(BG_SAVE_FILE, path.to_string_lossy().as_ref());
+            // Copy the image into the app config dir so it persists even if the
+            // user later moves or deletes the original.
+            let stored = save_bg(&path).unwrap_or(path);
             let _ = slint::invoke_from_event_loop(move || {
-                if let (Some(img), Some(ui)) = (load_image(&path), ui_weak.upgrade()) {
+                if let (Some(img), Some(ui)) = (load_image(&stored), ui_weak.upgrade()) {
                     ui.set_bg_image(img);
                     ui.set_use_bg_image(true);
                 }
@@ -205,22 +261,39 @@ fn open_file_dialog_async(ui_weak: slint::Weak<AppWindow>) {
 
 // ── Window size management ────────────────────────────────────────────────────
 
+// Base cell size in logical px. MUST match `cell-base` in main.slint so the
+// design (1.0-zoom) window size lines up exactly with the rendered layout.
+const CELL_BASE: f32 = 32.0;
+// Combined logical height of all the non-grid chrome at zoom 1.0:
+// outer padding (8*2) + header (42) + spacing (6) + toolbar (28) + spacing (6).
+const CHROME_BASE: f32 = 16.0 + 42.0 + 6.0 + 28.0 + 6.0;
+
+// Design (natural, zoom = 1.0) size of the window for a given difficulty.
+fn design_size(diff: Difficulty) -> (f32, f32) {
+    let w = (diff.cols as f32 * CELL_BASE) + 16.0; // + horizontal padding
+    let h = (diff.rows as f32 * CELL_BASE) + CHROME_BASE;
+    (w.max(300.0), h)
+}
+
 fn apply_ideal_window_size(ui: &AppWindow, diff: Difficulty) {
-    let cell_size = 35.0; 
-    let header_and_ui_height = 140.0;
-    let new_width = (diff.cols as f32 * cell_size).max(350.0);
-    let new_height = (diff.rows as f32 * cell_size) + header_and_ui_height;
-    ui.window().set_size(LogicalSize::new(new_width, new_height));
+    let (w, h) = design_size(diff);
+    ui.window().set_size(LogicalSize::new(w, h));
     update_zoom(ui);
 }
 
-// Compute the UI chrome scale from the current window width and push it into
-// the `zoom` input property. Doing this in Rust keeps `zoom` out of Slint's
-// layout graph, avoiding the binding loop you get when deriving it from
-// root.width/height inside the .slint file.
+// Compute ONE scale factor for the whole UI from the window size vs. the
+// design size, using min of the two axes so the interface scales uniformly
+// (preserving aspect) instead of the grid stretching on its own. Computed in
+// Rust to keep `zoom` out of Slint's layout graph and avoid a binding loop.
 fn update_zoom(ui: &AppWindow) {
-    let w = ui.window().size().to_logical(ui.window().scale_factor()).width;
-    let zoom = (w / 350.0).clamp(0.75, 2.0);
+    let size = ui.window().size().to_logical(ui.window().scale_factor());
+    let diff = Difficulty {
+        cols: ui.get_cols() as usize,
+        rows: ui.get_rows() as usize,
+        mines: 0,
+    };
+    let (ref_w, ref_h) = design_size(diff);
+    let zoom = (size.width / ref_w).min(size.height / ref_h).clamp(0.5, 4.0);
     ui.set_zoom(zoom);
 }
 
@@ -233,10 +306,9 @@ fn main() -> Result<(), slint::PlatformError> {
 
     apply_ideal_window_size(&ui, EASY);
 
-    // Attempt to restore custom background
-    if let Ok(path_str) = std::fs::read_to_string(BG_SAVE_FILE) {
-        let path = std::path::Path::new(path_str.trim());
-        if let Some(img) = load_image(path) {
+    // Attempt to restore custom background from the app config dir
+    if let Some(path) = saved_bg_path() {
+        if let Some(img) = load_image(&path) {
             ui.set_bg_image(img);
             ui.set_use_bg_image(true);
         }
@@ -272,17 +344,18 @@ fn main() -> Result<(), slint::PlatformError> {
 
     // Keep `zoom` in sync with the window size. Slint has no version-stable
     // per-frame resize callback we can rely on here, so we poll the size on a
-    // short interval and only update the property when the width actually
-    // changes. This is cheap and makes resizing feel responsive.
+    // short interval and only update when the size actually changes. Cheap and
+    // responsive. We watch both axes since zoom now depends on width AND height.
     let zoom_timer = Timer::default();
     {
         let ui = ui.as_weak();
-        let last_w = Rc::new(RefCell::new(0.0_f32));
-        zoom_timer.start(TimerMode::Repeated, Duration::from_millis(80), move || {
+        let last = Rc::new(RefCell::new((0.0_f32, 0.0_f32)));
+        zoom_timer.start(TimerMode::Repeated, Duration::from_millis(60), move || {
             if let Some(ui) = ui.upgrade() {
-                let w = ui.window().size().to_logical(ui.window().scale_factor()).width;
-                if (w - *last_w.borrow()).abs() > 0.5 {
-                    *last_w.borrow_mut() = w;
+                let s = ui.window().size().to_logical(ui.window().scale_factor());
+                let (lw, lh) = *last.borrow();
+                if (s.width - lw).abs() > 0.5 || (s.height - lh).abs() > 0.5 {
+                    *last.borrow_mut() = (s.width, s.height);
                     update_zoom(&ui);
                 }
             }
@@ -317,7 +390,7 @@ fn main() -> Result<(), slint::PlatformError> {
 
     { let ui2 = ui.as_weak();
       ui.on_clear_bg_image(move || { 
-          let _ = std::fs::remove_file(BG_SAVE_FILE);
+          clear_bg();
           ui2.unwrap().set_use_bg_image(false); 
       }); }
 

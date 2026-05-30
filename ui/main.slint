@@ -31,12 +31,17 @@ export component AppWindow inherits Window {
     min-width: 300px;
     min-height: 400px;
 
-    // UI chrome scale factor. Computed in Rust from the live window size and
-    // pushed in as a plain input. Kept OUT of the layout graph on purpose:
-    // deriving it from root.width/height here creates a binding loop, because
-    // zoom drives the children's sizes which feed back into the window's
-    // layout info. As an input property it's a constant from the layout's view.
+    // Single scale factor for the WHOLE UI. Computed in Rust from the live
+    // window size vs. the design size, using min(w/ref-w, h/ref-h) so the
+    // entire interface (chrome + grid) scales as one uniform block, like
+    // zooming a page. Kept OUT of the layout graph (as an input property) to
+    // avoid a binding loop, since zoom drives the sizes that feed layout info.
     in property <float> zoom: 1.0;
+
+    // Base (1.0-zoom) size of one grid cell, in logical px. The grid's natural
+    // size is cols*cell-base by rows*cell-base; everything else is sized to
+    // match. Rust uses the same constant to compute the design window size.
+    property <length> cell-base: 32px;
 
     // ── Palette ───────────────────────────────────────────────────────────────
     property <color> p-bg:      dark-mode ? #1e1e2e : #dfe3f0;
@@ -82,7 +87,13 @@ export component AppWindow inherits Window {
         width: parent.width;
         height: parent.height;
 
+        // The content block is sized to its natural (zoom-scaled) dimensions and
+        // centered, so the whole UI scales as one unit rather than the grid
+        // absorbing leftover space on its own.
         VerticalLayout {
+            width: (root.cols * root.cell-base + 16px) * root.zoom;
+            x: (parent.width - self.width) / 2;
+            y: max(0px, (parent.height - self.height) / 2);
             padding: 8px * zoom;
             spacing: 6px * zoom;
 
@@ -238,9 +249,9 @@ export component AppWindow inherits Window {
                 }
             }
 
-            // ── Fluid Grid ─────────────────────────────────────────────────────────
+            // ── Grid (scales in lockstep with the chrome) ──────────────────────────
             Rectangle {
-                vertical-stretch: 1; 
+                height: root.rows * root.cell-base * root.zoom;
                 border-radius: 8px * zoom;
                 background: use-bg-image ? (dark-mode ? #31324488 : #c8cedf88) : p-surface;
                 clip: true;
