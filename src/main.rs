@@ -8,6 +8,8 @@ use std::{cell::RefCell, rc::Rc, time::{Duration, Instant}};
 
 slint::include_modules!();
 
+const BG_SAVE_FILE: &str = "minesweeper_bg.txt";
+
 // ── Difficulty ────────────────────────────────────────────────────────────────
 
 #[derive(Clone, Copy)]
@@ -189,6 +191,8 @@ fn open_file_dialog_async(ui_weak: slint::Weak<AppWindow>) {
     std::thread::spawn(move || {
         if let Some(file) = futures_lite::future::block_on(task) {
             let path = file.path().to_owned();
+            // Save the path to load on next startup
+            let _ = std::fs::write(BG_SAVE_FILE, path.to_string_lossy().as_ref());
             let _ = slint::invoke_from_event_loop(move || {
                 if let (Some(img), Some(ui)) = (load_image(&path), ui_weak.upgrade()) {
                     ui.set_bg_image(img);
@@ -207,7 +211,19 @@ fn apply_ideal_window_size(ui: &AppWindow, diff: Difficulty) {
     let new_width = (diff.cols as f32 * cell_size).max(350.0);
     let new_height = (diff.rows as f32 * cell_size) + header_and_ui_height;
     ui.window().set_size(LogicalSize::new(new_width, new_height));
+    update_zoom(ui);
 }
+
+// Compute the UI chrome scale from the current window width and push it into
+// the `zoom` input property. Doing this in Rust keeps `zoom` out of Slint's
+// layout graph, avoiding the binding loop you get when deriving it from
+// root.width/height inside the .slint file.
+fn update_zoom(ui: &AppWindow) {
+    let w = ui.window().size().to_logical(ui.window().scale_factor()).width;
+    let zoom = (w / 350.0).clamp(0.75, 2.0);
+    ui.set_zoom(zoom);
+}
+
 
 // ── Main ──────────────────────────────────────────────────────────────────────
 
@@ -216,6 +232,15 @@ fn main() -> Result<(), slint::PlatformError> {
     let game: Rc<RefCell<Game>> = Rc::new(RefCell::new(Game::new(EASY)));
 
     apply_ideal_window_size(&ui, EASY);
+
+    // Attempt to restore custom background
+    if let Ok(path_str) = std::fs::read_to_string(BG_SAVE_FILE) {
+        let path = std::path::Path::new(path_str.trim());
+        if let Some(img) = load_image(path) {
+            ui.set_bg_image(img);
+            ui.set_use_bg_image(true);
+        }
+    }
 
     let push_state = {
         let ui = ui.as_weak();
@@ -233,7 +258,6 @@ fn main() -> Result<(), slint::PlatformError> {
 
     push_state();
 
-    // Timer: Simplified to just update elapsed seconds natively at 1hz
     let tick_timer = Timer::default();
     {
         let ui = ui.as_weak();
@@ -242,6 +266,25 @@ fn main() -> Result<(), slint::PlatformError> {
             if let Some(ui) = ui.upgrade() {
                 let elapsed = game.borrow_mut().tick();
                 ui.set_elapsed_seconds(elapsed as i32);
+            }
+        });
+    }
+
+    // Keep `zoom` in sync with the window size. Slint has no version-stable
+    // per-frame resize callback we can rely on here, so we poll the size on a
+    // short interval and only update the property when the width actually
+    // changes. This is cheap and makes resizing feel responsive.
+    let zoom_timer = Timer::default();
+    {
+        let ui = ui.as_weak();
+        let last_w = Rc::new(RefCell::new(0.0_f32));
+        zoom_timer.start(TimerMode::Repeated, Duration::from_millis(80), move || {
+            if let Some(ui) = ui.upgrade() {
+                let w = ui.window().size().to_logical(ui.window().scale_factor()).width;
+                if (w - *last_w.borrow()).abs() > 0.5 {
+                    *last_w.borrow_mut() = w;
+                    update_zoom(&ui);
+                }
             }
         });
     }
@@ -273,7 +316,10 @@ fn main() -> Result<(), slint::PlatformError> {
       ui.on_open_bg_picker(move || { open_file_dialog_async(ui2.clone()); }); }
 
     { let ui2 = ui.as_weak();
-      ui.on_clear_bg_image(move || { ui2.unwrap().set_use_bg_image(false); }); }
+      ui.on_clear_bg_image(move || { 
+          let _ = std::fs::remove_file(BG_SAVE_FILE);
+          ui2.unwrap().set_use_bg_image(false); 
+      }); }
 
     ui.run()
 }

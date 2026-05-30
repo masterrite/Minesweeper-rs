@@ -1,33 +1,37 @@
-# Minesweeper-rs
-A minesweeper game written in rust and slint using Claude and Gemini
+# Minesweeper — Rust + Slint
 
-## Features
-- Resizeable window with scaling game tiles
-- Customize background
-- Toggle between light/dark mode
-
-## Building
-
-### Prerequisites
-
-- **Rust stable** — https://rustup.rs
-- **Linux extras**: `sudo apt install libxcb-shape0-dev libxkbcommon-dev libfontconfig1-dev`
-- macOS / Windows: no extras needed
+## Build
 
 ```bash
-cd collector
-cargo run              # development
-cargo build --release  # → target/release/collector
+# Install Rust once
+curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
+
+# Linux only: X11 / font libs
+sudo apt install libxcb1-dev libxkbcommon-dev libfontconfig1-dev
+
+cargo run --release
 ```
 
-## Packaging
+## Controls
 
-```bash
-# Linux AppImage / .deb
-cargo install cargo-bundle && cargo bundle --release
+| Action | How |
+|--------|-----|
+| Reveal cell | Left click |
+| Flag / unflag | Right click |
+| **Chord** (reveal neighbours when flags match number) | **Left + Right click simultaneously on a revealed number** |
+| New game (same difficulty) | Click 🙂 |
+| Change difficulty | Easy / Medium / Hard buttons |
+| Toggle light/dark | ☀ Light / 🌙 Dark button |
+| Custom background | Click a colour swatch |
 
-# macOS .app
-cargo bundle --release   # → target/release/bundle/osx/Collector.app
+## Binary size optimisations (Cargo.toml)
 
-# Windows: the .exe is already standalone
-```
+| Setting | Effect |
+|---------|--------|
+| `opt-level = "z"` | Optimise for size |
+| `lto = true` | Dead-code elimination across all crates |
+| `codegen-units = 1` | Maximum LTO effectiveness |
+| `panic = "abort"` | No unwinding machinery |
+| `strip = true` | No debug symbols |
+| `slint` minimal features | Only `backend-winit` + `renderer-software` (no GL/Skia) |
+| `rand` minimal features | `small_rng` + `getrandom` only |

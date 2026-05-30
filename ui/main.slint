@@ -27,13 +27,16 @@ export component AppWindow inherits Window {
     in property <bool>      dark-mode: true;
     in property <image>     bg-image;
     in property <bool>      use-bg-image: false;
-    in property <float>     zoom: 1.0;
 
     min-width: 300px;
     min-height: 400px;
 
-    // Dynamically scale UI elements based on window size
-    property <float> s: min(root.width / 350px, root.height / 400px);
+    // UI chrome scale factor. Computed in Rust from the live window size and
+    // pushed in as a plain input. Kept OUT of the layout graph on purpose:
+    // deriving it from root.width/height here creates a binding loop, because
+    // zoom drives the children's sizes which feed back into the window's
+    // layout info. As an input property it's a constant from the layout's view.
+    in property <float> zoom: 1.0;
 
     // ── Palette ───────────────────────────────────────────────────────────────
     property <color> p-bg:      dark-mode ? #1e1e2e : #dfe3f0;
@@ -214,8 +217,8 @@ export component AppWindow inherits Window {
                             width: 28px * zoom; height: 28px * zoom;
                             clr-ta := TouchArea { clicked => { clear-bg-image(); } }
                             Text { 
-                                text: "✕"; color: clr-ta.has-hover ? p-red : p-subtext; 
-                                font-size: 14px * zoom; font-weight: 700; 
+                                text: "Clear"; color: clr-ta.has-hover ? p-red : p-subtext; 
+                                font-size: 10px * zoom; font-weight: 700; 
                                 width: 100%; height: 100%; 
                                 horizontal-alignment: center; vertical-alignment: center; 
                             }
@@ -259,9 +262,9 @@ export component AppWindow inherits Window {
                     background:
                         (left-down && right-down)              ? p-yellow.with-alpha(0.75) :
                         !cell.is-revealed && cell-ta.has-hover ? p-muted.with-alpha(0.85) :
-                        cell.is-revealed && cell.is-mine       ? p-red.with-alpha(0.45) :
-                        cell.is-revealed                       ? p-bg.with-alpha(0.45) :
-                        cell.is-flagged                        ? p-yellow.with-alpha(0.45) : p-overlay.with-alpha(0.85);
+                        cell.is-revealed && cell.is-mine       ? p-red.with-alpha(0.65) :
+                        cell.is-revealed                       ? p-bg.with-alpha(0.65) :
+                        cell.is-flagged                        ? p-yellow.with-alpha(0.65) : p-overlay.with-alpha(0.85);
                     
                     border-width: 1px;
                     border-color:
