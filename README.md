@@ -1,5 +1,7 @@
 # Minesweeper — Rust + Slint
 
+For fun. Built by Claude Opus 4.8.
+
 ## Build
 
 ```bash
@@ -24,14 +26,7 @@ cargo run --release
 | Toggle light/dark | ☀ Light / 🌙 Dark button |
 | Custom background | Click a colour swatch |
 
-## Binary size optimisations (Cargo.toml)
+## Extra feature
 
-| Setting | Effect |
-|---------|--------|
-| `opt-level = "z"` | Optimise for size |
-| `lto = true` | Dead-code elimination across all crates |
-| `codegen-units = 1` | Maximum LTO effectiveness |
-| `panic = "abort"` | No unwinding machinery |
-| `strip = true` | No debug symbols |
-| `slint` minimal features | Only `backend-winit` + `renderer-software` (no GL/Skia) |
-| `rand` minimal features | `small_rng` + `getrandom` only |
+- Set your own background
+- Resizing the window also scales the UI
