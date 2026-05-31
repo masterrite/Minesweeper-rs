@@ -1,7 +1,7 @@
 # Minesweeper — Rust + Slint
 
 <img width="306" height="432" alt="Snipaste_2026-05-30_21-44-09" src="https://github.com/user-attachments/assets/dcd0c33a-1bd4-49c8-8320-2cd2c7b568c3" />
-
+ 
 For fun. Built by Claude Opus 4.8.
 
 ## Features
