@@ -36,10 +36,14 @@ export component AppWindow inherits Window {
     property <length> cell-base: 32px;
 
     // The UI's natural (zoom = 1.0) design size for the current difficulty.
-    // 16px = horizontal padding; 98px = total vertical chrome (padding 16 +
-    // header 42 + spacing 6 + toolbar 28 + spacing 6).
+    // 16px = horizontal padding.
+    // Vertical chrome reserves room so the grid never gets pushed out of view:
+    //   padding 16 + header 42 + spacing 6 + toolbar 28
+    //   + settings panel 62 + its spacing 6      (reserved even when closed)
+    //   + win/lose banner 30 + its spacing 6     (reserved even when hidden)
+    //   = 202px
     property <length> ref-width:  cols * cell-base + 16px;
-    property <length> ref-height: rows * cell-base + 98px;
+    property <length> ref-height: rows * cell-base + 202px;
 
     // Single scale factor for the WHOLE UI, derived live from the window size.
     // min() of the two axis ratios preserves aspect, so chrome + grid scale as
@@ -201,15 +205,13 @@ export component AppWindow inherits Window {
                 animate background { duration: 180ms; }
 
                 VerticalLayout {
-                    padding: 8px * zoom; spacing: 6px * zoom;
-                    Text {
-                        text: "SETTINGS";
-                        color: p-subtext; font-size: 9px * zoom; font-weight: 700; height: 12px * zoom;
-                    }
+                    padding: 8px * zoom; spacing: 4px * zoom;
+
+                    // Row 1: theme toggle + set/change background
                     HorizontalLayout {
-                        spacing: 6px * zoom; alignment: start; height: 28px * zoom;
+                        spacing: 6px * zoom; alignment: center; height: 28px * zoom;
                         Rectangle {
-                            width: 110px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
+                            width: 92px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
                             background: th-ta.has-hover ? p-overlay : p-bg.with-alpha(0.6);
                             border-width: 1px * zoom; border-color: p-muted;
                             animate background { duration: 80ms; }
@@ -221,7 +223,7 @@ export component AppWindow inherits Window {
                             }
                         }
                         Rectangle {
-                            width: 130px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
+                            width: 150px * zoom; height: 28px * zoom; border-radius: 6px * zoom;
                             background: bg-ta.has-hover ? p-overlay : p-bg.with-alpha(0.6);
                             border-width: 1px * zoom; border-color: p-muted;
                             animate background { duration: 80ms; }
@@ -229,17 +231,23 @@ export component AppWindow inherits Window {
                             HorizontalLayout {
                                 padding-left: 7px * zoom; padding-right: 7px * zoom; spacing: 5px * zoom; alignment: center;
                                 Text { text: "📁"; font-size: 14px * zoom; height: 28px * zoom; vertical-alignment: center; }
-                                Text { text: use-bg-image ? "Change bg" : "Set bg image"; color: p-text; font-size: 11px * zoom; font-weight: 600; vertical-alignment: center; }
+                                Text { text: use-bg-image ? "Change background" : "Set background"; color: p-text; font-size: 11px * zoom; font-weight: 600; vertical-alignment: center; }
                             }
                         }
-                        if use-bg-image : Rectangle {
-                            width: 28px * zoom; height: 28px * zoom;
+                    }
+
+                    // Row 2: clear background (red on hover), centered
+                    if use-bg-image : HorizontalLayout {
+                        alignment: center; height: 14px * zoom;
+                        Rectangle {
+                            width: clr-text.preferred-width;
                             clr-ta := TouchArea { clicked => { clear-bg-image(); } }
-                            Text { 
-                                text: "Clear"; color: clr-ta.has-hover ? p-red : p-subtext; 
-                                font-size: 10px * zoom; font-weight: 700; 
-                                width: 100%; height: 100%; 
-                                horizontal-alignment: center; vertical-alignment: center; 
+                            clr-text := Text {
+                                text: "Clear background";
+                                color: clr-ta.has-hover ? p-red : p-subtext;
+                                font-size: 11px * zoom; font-weight: 700;
+                                vertical-alignment: center;
+                                animate color { duration: 80ms; }
                             }
                         }
                     }

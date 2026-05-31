@@ -264,9 +264,13 @@ fn open_file_dialog_async(ui_weak: slint::Weak<AppWindow>) {
 // Base cell size in logical px. MUST match `cell-base` in main.slint so the
 // design (1.0-zoom) window size lines up exactly with the rendered layout.
 const CELL_BASE: f32 = 32.0;
-// Combined logical height of all the non-grid chrome at zoom 1.0:
-// outer padding (8*2) + header (42) + spacing (6) + toolbar (28) + spacing (6).
-const CHROME_BASE: f32 = 16.0 + 42.0 + 6.0 + 28.0 + 6.0;
+// Combined logical height of all non-grid chrome at zoom 1.0, reserving space
+// for the settings panel and win/lose banner so they never push the grid out
+// of view. MUST match the `ref-height` constant (202px) in main.slint.
+//   padding 16 + header 42 + spacing 6 + toolbar 28
+//   + settings 62 + spacing 6 + banner 30 + spacing 6 = 196, rounded up to 202
+//   for a small bottom margin.
+const CHROME_BASE: f32 = 202.0;
 
 // Design (natural, zoom = 1.0) size of the window for a given difficulty.
 fn design_size(diff: Difficulty) -> (f32, f32) {
@@ -276,6 +280,13 @@ fn design_size(diff: Difficulty) -> (f32, f32) {
 }
 
 fn apply_ideal_window_size(ui: &AppWindow, diff: Difficulty) {
+    // If the window is maximized, clear that state first. Calling set_size while
+    // maximized changes the pixels but leaves the OS "maximized" flag set, so the
+    // titlebar restore button and the next un-maximize behave wrongly. Restoring
+    // to normal state first keeps the window manager's state consistent.
+    if ui.window().is_maximized() {
+        ui.window().set_maximized(false);
+    }
     let (w, h) = design_size(diff);
     ui.window().set_size(LogicalSize::new(w, h));
 }
