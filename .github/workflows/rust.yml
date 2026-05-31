@@ -1,0 +1,153 @@
+name: Build
+# Build native binaries for Windows, macOS, and Linux.
+#
+# Triggers:
+#   - on every push to main / pull request: builds all (CI check)
+#   - on pushing a version tag like v1.0.0: builds all AND attaches
+#     the binaries to a GitHub Release. macOS ships as .dmg.
+on:
+  push:
+    branches: [main]
+    tags: ['v*']
+  pull_request:
+    branches: [main]
+  workflow_dispatch:   # allows manual "Run workflow" button in the Actions tab
+
+# Needed so the release job can create a Release and upload assets.
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Build (${{ matrix.target }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            target: x86_64-pc-windows-msvc
+            artifact: Minesweeper-rs.exe
+            asset: Minesweeper-rs-windows-x86_64.exe
+          - os: macos-latest
+            target: aarch64-apple-darwin       # Apple Silicon (M1+)
+            artifact: Minesweeper-rs
+            asset: Minesweeper-rs-macos-arm64.dmg
+          - os: macos-15-intel
+            target: x86_64-apple-darwin         # Intel Macs
+            artifact: Minesweeper-rs
+            asset: Minesweeper-rs-macos-x86_64.dmg
+          - os: ubuntu-latest
+            target: x86_64-unknown-linux-gnu
+            artifact: Minesweeper-rs
+            asset: Minesweeper-rs-linux-x86_64
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      # Cache cargo registry + build output to speed up subsequent runs.
+      - name: Cache cargo
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+            target
+          key: ${{ matrix.target }}-cargo-${{ hashFiles('**/Cargo.lock') }}
+          restore-keys: |
+            ${{ matrix.target }}-cargo-
+
+      # Linux needs system libraries for the GUI (Slint/winit), font rendering,
+      # and the rfd native file dialog (GTK).
+      - name: Install Linux dependencies
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y \
+            libgtk-3-dev \
+            libxcb-render0-dev \
+            libxcb-shape0-dev \
+            libxcb-xfixes0-dev \
+            libxkbcommon-dev \
+            libfontconfig1-dev \
+            libfreetype6-dev
+
+      - name: Build release
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # -- Stage: Linux (raw binary) --
+      - name: Stage binary (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          mkdir -p dist
+          cp "target/${{ matrix.target }}/release/${{ matrix.artifact }}" "dist/${{ matrix.asset }}"
+          chmod +x "dist/${{ matrix.asset }}"
+
+      # -- Stage: Windows (raw exe) --
+      - name: Stage binary (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist
+          Copy-Item "target/${{ matrix.target }}/release/${{ matrix.artifact }}" "dist/${{ matrix.asset }}"
+
+      # -- Stage: macOS (.app bundle inside a .dmg) --
+      - name: Stage binary (macOS dmg)
+        if: runner.os == 'macOS'
+        run: |
+          set -euo pipefail
+          APP="Minesweeper-rs.app"
+          mkdir -p "${APP}/Contents/MacOS" "${APP}/Contents/Resources"
+
+          cat > "${APP}/Contents/Info.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>CFBundleName</key>             <string>Minesweeper-rs</string>
+            <key>CFBundleDisplayName</key>      <string>Minesweeper</string>
+            <key>CFBundleExecutable</key>       <string>${{ matrix.artifact }}</string>
+            <key>CFBundleIdentifier</key>       <string>com.example.minesweeper-rs</string>
+            <key>CFBundlePackageType</key>      <string>APPL</string>
+            <key>LSMinimumSystemVersion</key>   <string>10.13</string>
+            <key>NSHighResolutionCapable</key>  <true/>
+          </dict>
+          </plist>
+          PLIST
+
+          cp "target/${{ matrix.target }}/release/${{ matrix.artifact }}" "${APP}/Contents/MacOS/${{ matrix.artifact }}"
+          chmod +x "${APP}/Contents/MacOS/${{ matrix.artifact }}"
+
+          # Ad-hoc sign (not notarization -- users still right-click > Open first time).
+          codesign --force --deep --sign - "${APP}" || true
+
+          mkdir -p dist
+          # Simple, dependency-free dmg via hdiutil.
+          STAGE="$(mktemp -d)"
+          cp -R "${APP}" "${STAGE}/"
+          ln -s /Applications "${STAGE}/Applications"
+          hdiutil create -volname "Minesweeper-rs" \
+            -srcfolder "${STAGE}" -ov -format UDZO \
+            "dist/${{ matrix.asset }}"
+
+      # Upload each platform's artifact (downloadable from the run summary).
+      - name: Upload build artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.asset }}
+          path: dist/${{ matrix.asset }}
+          if-no-files-found: error
+
+      # On a version tag, attach the artifact to a GitHub Release.
+      - name: Attach to release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/${{ matrix.asset }}
+          fail_on_unmatched_files: true
